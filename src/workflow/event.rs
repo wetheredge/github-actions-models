@@ -1,7 +1,7 @@
 //! Workflow events.
 
 use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, ser::SerializeMap as _};
 
 use crate::common::EnvValue;
 
@@ -60,40 +60,67 @@ pub enum BareEvent {
 #[derive(Deserialize, Serialize, Debug, Default)]
 #[serde(default, rename_all = "snake_case")]
 pub struct Events {
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub branch_protection_rule: OptionalBody<GenericEvent>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub check_run: OptionalBody<GenericEvent>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub check_suite: OptionalBody<GenericEvent>,
     // NOTE: `create` and `delete` are omitted, since they are always bare.
     // NOTE: `deployment` and `deployment_status` are omitted, since they are always bare.
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub discussion: OptionalBody<GenericEvent>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub discussion_comment: OptionalBody<GenericEvent>,
     // NOTE: `fork` and `gollum` are omitted, since they are always bare.
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub issue_comment: OptionalBody<GenericEvent>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub issues: OptionalBody<GenericEvent>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub label: OptionalBody<GenericEvent>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub merge_group: OptionalBody<GenericEvent>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub milestone: OptionalBody<GenericEvent>,
     // NOTE: `page_build` is omitted, since it is always bare.
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub project: OptionalBody<GenericEvent>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub project_card: OptionalBody<GenericEvent>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub project_column: OptionalBody<GenericEvent>,
     // NOTE: `public` is omitted, since it is always bare.
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub pull_request: OptionalBody<PullRequest>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub pull_request_comment: OptionalBody<GenericEvent>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub pull_request_review: OptionalBody<GenericEvent>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub pull_request_review_comment: OptionalBody<GenericEvent>,
     // NOTE: `pull_request_target` appears to have the same trigger filters as `pull_request`.
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub pull_request_target: OptionalBody<PullRequest>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub push: OptionalBody<Push>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub registry_package: OptionalBody<GenericEvent>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub release: OptionalBody<GenericEvent>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub repository_dispatch: OptionalBody<GenericEvent>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub schedule: OptionalBody<Vec<Cron>>,
     // NOTE: `status` is omitted, since it is always bare.
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub watch: OptionalBody<GenericEvent>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub workflow_call: OptionalBody<WorkflowCall>,
     // TODO: Custom type.
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub workflow_dispatch: OptionalBody<WorkflowDispatch>,
+    #[serde(skip_serializing_if = "OptionalBody::is_missing")]
     pub workflow_run: OptionalBody<WorkflowRun>,
 }
 
@@ -157,12 +184,22 @@ impl Events {
 /// between the non-presence of an event (no trigger) and the presence
 /// of an empty event body (e.g. `pull_request:`), which means "trigger
 /// with the defaults for this event type."
-#[derive(Serialize, Debug, Default)]
+#[derive(Debug, Default)]
 pub enum OptionalBody<T> {
     Default,
     #[default]
     Missing,
     Body(T),
+}
+
+impl<T> OptionalBody<T> {
+    /// Returns `true` if the optional body is [`Missing`].
+    ///
+    /// [`Missing`]: OptionalBody::Missing
+    #[must_use]
+    pub(crate) fn is_missing(&self) -> bool {
+        matches!(self, Self::Missing)
+    }
 }
 
 impl<'de, T> Deserialize<'de> for OptionalBody<T>
@@ -174,6 +211,24 @@ where
         D: serde::Deserializer<'de>,
     {
         Option::deserialize(deserializer).map(Into::into)
+    }
+}
+
+impl<T> Serialize for OptionalBody<T>
+where
+    T: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            OptionalBody::Default => serializer.serialize_map(Some(0))?.end(),
+            OptionalBody::Missing => Err(serde::ser::Error::custom(
+                "OptionalBody::Missing cannot be serialized",
+            )),
+            OptionalBody::Body(body) => body.serialize(serializer),
+        }
     }
 }
 
