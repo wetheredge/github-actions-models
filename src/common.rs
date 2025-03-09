@@ -6,7 +6,7 @@ use std::{
 };
 
 use indexmap::IndexMap;
-use serde::{Deserialize, Deserializer, Serialize, de};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de, ser::SerializeMap as _};
 
 pub mod expr;
 
@@ -26,6 +26,12 @@ pub enum Permissions {
 impl Default for Permissions {
     fn default() -> Self {
         Self::Base(BasePermission::Default)
+    }
+}
+
+impl Permissions {
+    pub(crate) fn is_default(&self) -> bool {
+        matches!(self, Self::Base(BasePermission::Default))
     }
 }
 
@@ -478,6 +484,44 @@ where
             "docker action invalid in reusable workflow `uses`",
         )),
     }
+}
+
+pub(crate) fn serialize_map_without_nones<K, V, S>(
+    map: &IndexMap<K, Option<V>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    K: Serialize,
+    V: Serialize,
+    S: Serializer,
+{
+    let entries = map.iter().filter_map(|(k, v)| v.as_ref().map(|v| (k, v)));
+    let mut map = serializer.serialize_map(Some(entries.clone().count()))?;
+    for (key, value) in entries {
+        map.serialize_entry(key, value)?;
+    }
+    map.end()
+}
+
+pub(crate) fn env_is_empty(env: &expr::LoE<Env>) -> bool {
+    matches!(env, expr::LoE::Literal(env) if env.is_empty())
+}
+
+pub(crate) fn is_literal_false(val: &expr::BoE) -> bool {
+    matches!(val, expr::LoE::Literal(false))
+}
+
+pub(crate) fn is_literal_empty_vec<T>(val: &expr::LoE<Vec<T>>) -> bool {
+    matches!(val, expr::LoE::Literal(vec) if vec.is_empty())
+}
+
+pub(crate) fn is_literal_empty_map<K, V>(val: &expr::LoE<IndexMap<K, V>>) -> bool {
+    matches!(val, expr::LoE::Literal(map) if map.is_empty())
+}
+
+/// Helper for `#[serde(skip_serializing_if)]` for fields that default to false
+pub(crate) fn is_false(b: &bool) -> bool {
+    !b
 }
 
 #[cfg(test)]

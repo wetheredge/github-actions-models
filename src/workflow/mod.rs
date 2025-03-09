@@ -22,14 +22,18 @@ pub mod job;
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct Workflow {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub run_name: Option<String>,
     pub on: Trigger,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Permissions::is_default")]
     pub permissions: Permissions,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "crate::common::env_is_empty")]
     pub env: LoE<Env>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub defaults: Option<Defaults>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub concurrency: Option<Concurrency>,
     pub jobs: IndexMap<String, Job>,
 }
@@ -68,13 +72,16 @@ pub enum Trigger {
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct Defaults {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub run: Option<RunDefaults>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct RunDefaults {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub shell: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub working_directory: Option<String>,
 }
 
@@ -84,7 +91,7 @@ pub enum Concurrency {
     Bare(String),
     Rich {
         group: String,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::common::is_literal_false")]
         cancel_in_progress: BoE,
     },
 }

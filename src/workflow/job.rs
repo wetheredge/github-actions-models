@@ -14,27 +14,39 @@ use super::{Concurrency, Defaults};
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct NormalJob {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Permissions::is_default")]
     pub permissions: Permissions,
-    #[serde(default, with = "crate::common::scalar_or_vector")]
+    #[serde(
+        default,
+        with = "crate::common::scalar_or_vector",
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub needs: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub r#if: Option<If>,
     pub runs_on: LoE<RunsOn>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub environment: Option<DeploymentEnvironment>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub concurrency: Option<Concurrency>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub outputs: IndexMap<String, String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "crate::common::env_is_empty")]
     pub env: LoE<Env>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub defaults: Option<Defaults>,
     pub steps: Vec<Step>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout_minutes: Option<LoE<u64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub strategy: Option<Strategy>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "crate::common::is_literal_false")]
     pub continue_on_error: BoE,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub container: Option<Container>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub services: IndexMap<String, Container>,
 }
 
@@ -44,11 +56,16 @@ pub enum RunsOn {
     #[serde(with = "crate::common::scalar_or_vector")]
     Target(Vec<String>),
     Group {
+        #[serde(skip_serializing_if = "Option::is_none")]
         group: Option<String>,
         // NOTE(ww): serde struggles with the null/empty case for custom
         // deserializers, so we help it out by telling it that it can default
         // to Vec::default.
-        #[serde(with = "crate::common::scalar_or_vector", default)]
+        #[serde(
+            default,
+            with = "crate::common::scalar_or_vector",
+            skip_serializing_if = "Vec::is_empty"
+        )]
         labels: Vec<String>,
     },
 }
@@ -88,27 +105,35 @@ impl Serialize for RunsOn {
 #[serde(rename_all = "kebab-case", untagged)]
 pub enum DeploymentEnvironment {
     Name(String),
-    NameURL { name: String, url: Option<String> },
+    NameURL {
+        name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        url: Option<String>,
+    },
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct Step {
     /// An optional ID for this step.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
 
     /// An optional expression that prevents this step from running unless it evaluates to `true`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub r#if: Option<If>,
 
     /// An optional name for this step.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 
     /// An optional timeout for this step, in minutes.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout_minutes: Option<LoE<u64>>,
 
     /// An optional boolean or expression that, if `true`, prevents the job from failing when
     /// this step fails.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "crate::common::is_literal_false")]
     pub continue_on_error: BoE,
 
     /// The `run:` or `uses:` body for this step.
@@ -125,7 +150,7 @@ pub enum StepBody {
         uses: Uses,
 
         /// Any inputs to the action being used.
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
         with: Env,
     },
     Run {
@@ -134,14 +159,16 @@ pub enum StepBody {
         run: String,
 
         /// An optional working directory to run [`StepBody::Run::run`] from.
+        #[serde(skip_serializing_if = "Option::is_none")]
         working_directory: Option<String>,
 
         /// An optional shell to run in. Defaults to the job or workflow's
         /// default shell.
+        #[serde(skip_serializing_if = "Option::is_none")]
         shell: Option<String>,
 
         /// An optional environment mapping for this step.
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::common::env_is_empty")]
         env: LoE<Env>,
     },
 }
@@ -149,19 +176,22 @@ pub enum StepBody {
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct Strategy {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub matrix: Option<LoE<Matrix>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub fail_fast: Option<BoE>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_parallel: Option<LoE<u64>>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct Matrix {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "crate::common::is_literal_empty_vec")]
     pub include: LoE<Vec<IndexMap<String, Value>>>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "crate::common::is_literal_empty_vec")]
     pub exclude: LoE<Vec<IndexMap<String, Value>>>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "crate::common::is_literal_empty_map")]
     pub dimensions: LoE<IndexMap<String, LoE<Vec<Value>>>>,
 }
 
@@ -171,35 +201,46 @@ pub enum Container {
     Name(String),
     Container {
         image: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
         credentials: Option<DockerCredentials>,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "crate::common::env_is_empty")]
         env: LoE<Env>,
         // TODO: model `ports`?
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         volumes: Vec<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         options: Option<String>,
     },
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct DockerCredentials {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct ReusableWorkflowCallJob {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Permissions::is_default")]
     pub permissions: Permissions,
-    #[serde(default, with = "crate::common::scalar_or_vector")]
+    #[serde(
+        default,
+        with = "crate::common::scalar_or_vector",
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub needs: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub r#if: Option<If>,
     #[serde(deserialize_with = "crate::common::reusable_step_uses")]
     pub uses: Uses,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub with: Env,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub secrets: Option<Secrets>,
 }
 
@@ -208,7 +249,7 @@ pub struct ReusableWorkflowCallJob {
 pub enum Secrets {
     Inherit,
     #[serde(untagged)]
-    Env(#[serde(default)] Env),
+    Env(#[serde(default, skip_serializing_if = "crate::common::env_is_empty")] Env),
 }
 
 #[cfg(test)]

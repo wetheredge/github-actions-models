@@ -245,7 +245,11 @@ impl<T> From<Option<T>> for OptionalBody<T> {
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct GenericEvent {
-    #[serde(default, with = "crate::common::scalar_or_vector")]
+    #[serde(
+        default,
+        with = "crate::common::scalar_or_vector",
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub types: Vec<String>,
 }
 
@@ -253,7 +257,7 @@ pub struct GenericEvent {
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct PullRequest {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub types: Vec<String>,
 
     #[serde(flatten)]
@@ -267,7 +271,7 @@ pub struct PullRequest {
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct Push {
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
     pub branch_filters: Option<BranchFilters>,
 
     #[serde(flatten)]
@@ -288,11 +292,15 @@ pub struct Cron {
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct WorkflowCall {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub inputs: IndexMap<String, WorkflowCallInput>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub outputs: IndexMap<String, WorkflowCallOutput>,
-    #[serde(default)]
+    #[serde(
+        default,
+        skip_serializing_if = "IndexMap::is_empty",
+        serialize_with = "crate::common::serialize_map_without_nones"
+    )]
     pub secrets: IndexMap<String, Option<WorkflowCallSecret>>,
 }
 
@@ -300,9 +308,10 @@ pub struct WorkflowCall {
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct WorkflowCallInput {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     // TODO: model `default`?
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "crate::common::is_false")]
     pub required: bool,
     pub r#type: String,
 }
@@ -311,6 +320,7 @@ pub struct WorkflowCallInput {
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct WorkflowCallOutput {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub value: String,
 }
@@ -319,6 +329,7 @@ pub struct WorkflowCallOutput {
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct WorkflowCallSecret {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub required: bool,
 }
@@ -327,7 +338,7 @@ pub struct WorkflowCallSecret {
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct WorkflowDispatch {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub inputs: IndexMap<String, WorkflowDispatchInput>, // TODO: WorkflowDispatchInput
 }
 
@@ -335,14 +346,16 @@ pub struct WorkflowDispatch {
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct WorkflowDispatchInput {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     // TODO: model `default`?
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "crate::common::is_false")]
     pub required: bool,
     // TODO: Model as boolean, choice, number, environment, string; default is string.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub r#type: Option<String>,
     // Only present when `type` is `choice`.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub options: Vec<EnvValue>,
 }
 
@@ -351,7 +364,7 @@ pub struct WorkflowDispatchInput {
 #[serde(rename_all = "kebab-case")]
 pub struct WorkflowRun {
     pub workflows: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub types: Vec<String>,
     #[serde(flatten)]
     pub branch_filters: Option<BranchFilters>,
