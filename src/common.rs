@@ -11,7 +11,7 @@ use serde::{Deserialize, Deserializer, Serialize, de};
 pub mod expr;
 
 /// `permissions` for a workflow, job, or step.
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 #[serde(rename_all = "kebab-case", untagged)]
 pub enum Permissions {
     /// Base, i.e. blanket permissions.
@@ -31,7 +31,7 @@ impl Default for Permissions {
 
 /// "Base" permissions, where all individual permissions are configured
 /// with a blanket setting.
-#[derive(Deserialize, Debug, Default, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum BasePermission {
     /// Whatever default permissions come from the workflow's `GITHUB_TOKEN`.
@@ -44,7 +44,7 @@ pub enum BasePermission {
 }
 
 /// A singular permission setting.
-#[derive(Deserialize, Debug, Default, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Permission {
     /// Read access.
@@ -92,7 +92,7 @@ impl Display for EnvValue {
 /// key can have either a scalar value or an array of values.
 ///
 /// This only appears internally, as an intermediate type for `scalar_or_vector`.
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 #[serde(untagged)]
 enum SoV<T> {
     One(T),
@@ -108,18 +108,54 @@ impl<T> From<SoV<T>> for Vec<T> {
     }
 }
 
-pub(crate) fn scalar_or_vector<'de, D, T>(de: D) -> Result<Vec<T>, D::Error>
-where
-    D: Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    SoV::deserialize(de).map(Into::into)
+pub(crate) mod scalar_or_vector {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    /// A "scalar or vector" type, for places in GitHub Actions where a
+    /// key can have either a scalar value or an array of values.
+    ///
+    /// This only appears internally, as an intermediate type for `scalar_or_vector`.
+    #[derive(Debug, Deserialize, Serialize, PartialEq)]
+    #[serde(untagged)]
+    enum SoV<T> {
+        One(T),
+        Many(Vec<T>),
+    }
+
+    impl<T> From<SoV<T>> for Vec<T> {
+        fn from(val: SoV<T>) -> Vec<T> {
+            match val {
+                SoV::One(v) => vec![v],
+                SoV::Many(vs) => vs,
+            }
+        }
+    }
+
+    pub(crate) fn deserialize<'de, D, T>(de: D) -> Result<Vec<T>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de>,
+    {
+        SoV::deserialize(de).map(Into::into)
+    }
+
+    pub(crate) fn serialize<S, T>(val: &Vec<T>, ser: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: Serialize,
+    {
+        if val.len() == 1 {
+            val[0].serialize(ser)
+        } else {
+            val.serialize(ser)
+        }
+    }
 }
 
 /// A bool or string. This is useful for cases where GitHub Actions contextually
 /// reinterprets a YAML boolean as a string, e.g. `run: true` really means
 /// `run: 'true'`.
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 #[serde(untagged)]
 enum BoS {
     Bool(bool),
@@ -199,6 +235,25 @@ impl FromStr for Uses {
     }
 }
 
+impl Display for Uses {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Uses::Local(local) => Display::fmt(local, f),
+            Uses::Repository(repository) => Display::fmt(repository, f),
+            Uses::Docker(docker) => Display::fmt(docker, f),
+        }
+    }
+}
+
+impl Serialize for Uses {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
 /// A `uses: ./some/path` clause.
 #[derive(Debug, PartialEq)]
 pub struct LocalUses {
@@ -233,6 +288,18 @@ impl FromStr for LocalUses {
             path: path.into(),
             git_ref: git_ref.map(Into::into),
         })
+    }
+}
+
+impl Display for LocalUses {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.path)?;
+
+        if let Some(git_ref) = self.git_ref.as_deref() {
+            f.write_str(git_ref)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -278,6 +345,22 @@ impl FromStr for RepositoryUses {
             subpath: components.get(2).map(ToString::to_string),
             git_ref: git_ref.map(Into::into),
         })
+    }
+}
+
+impl Display for RepositoryUses {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}/{}", self.owner, self.repo)?;
+
+        if let Some(subpath) = self.subpath.as_deref() {
+            write!(f, "/{subpath}")?;
+        }
+
+        if let Some(git_ref) = self.git_ref.as_deref() {
+            write!(f, "@{git_ref}")?;
+        }
+
+        Ok(())
     }
 }
 
@@ -342,6 +425,28 @@ impl FromStr for DockerUses {
                 hash: None,
             })
         }
+    }
+}
+
+impl Display for DockerUses {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("docker://")?;
+
+        if let Some(registry) = self.registry.as_deref() {
+            write!(f, "{registry}/")?;
+        }
+
+        f.write_str(&self.image)?;
+
+        if let Some(tag) = self.tag.as_deref() {
+            write!(f, ":{tag}")?;
+        }
+
+        if let Some(hash) = self.hash.as_deref() {
+            write!(f, "@{hash}")?;
+        }
+
+        Ok(())
     }
 }
 

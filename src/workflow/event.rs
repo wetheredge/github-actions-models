@@ -13,7 +13,7 @@ use crate::common::EnvValue;
 /// ```yaml
 /// on: push
 /// ```
-#[derive(Deserialize, Debug, PartialEq, Eq, Hash)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum BareEvent {
     BranchProtectionRule,
@@ -190,7 +190,7 @@ impl<T> From<Option<T>> for OptionalBody<T> {
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct GenericEvent {
-    #[serde(default, deserialize_with = "crate::common::scalar_or_vector")]
+    #[serde(default, with = "crate::common::scalar_or_vector")]
     pub types: Vec<String>,
 }
 

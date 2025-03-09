@@ -1,7 +1,7 @@
 //! Workflow jobs.
 
 use indexmap::IndexMap;
-use serde::{Deserialize, de};
+use serde::{Deserialize, Serialize, de};
 use serde_yaml::Value;
 
 use crate::common::expr::{BoE, LoE};
@@ -11,13 +11,13 @@ use super::{Concurrency, Defaults};
 
 /// A "normal" GitHub Actions workflow job, i.e. a job composed of one
 /// or more steps on a runner.
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct NormalJob {
     pub name: Option<String>,
     #[serde(default)]
     pub permissions: Permissions,
-    #[serde(default, deserialize_with = "crate::common::scalar_or_vector")]
+    #[serde(default, with = "crate::common::scalar_or_vector")]
     pub needs: Vec<String>,
     pub r#if: Option<If>,
     pub runs_on: LoE<RunsOn>,
@@ -38,17 +38,17 @@ pub struct NormalJob {
     pub services: IndexMap<String, Container>,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 #[serde(rename_all = "kebab-case", untagged, remote = "Self")]
 pub enum RunsOn {
-    #[serde(deserialize_with = "crate::common::scalar_or_vector")]
+    #[serde(with = "crate::common::scalar_or_vector")]
     Target(Vec<String>),
     Group {
         group: Option<String>,
         // NOTE(ww): serde struggles with the null/empty case for custom
         // deserializers, so we help it out by telling it that it can default
         // to Vec::default.
-        #[serde(deserialize_with = "crate::common::scalar_or_vector", default)]
+        #[serde(with = "crate::common::scalar_or_vector", default)]
         labels: Vec<String>,
     },
 }
@@ -75,14 +75,23 @@ impl<'de> Deserialize<'de> for RunsOn {
     }
 }
 
-#[derive(Deserialize, Debug)]
+impl Serialize for RunsOn {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        Self::serialize(self, serializer)
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case", untagged)]
 pub enum DeploymentEnvironment {
     Name(String),
     NameURL { name: String, url: Option<String> },
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct Step {
     /// An optional ID for this step.
@@ -107,7 +116,7 @@ pub struct Step {
     pub body: StepBody,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case", untagged)]
 pub enum StepBody {
     Uses {
@@ -137,7 +146,7 @@ pub enum StepBody {
     },
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct Strategy {
     pub matrix: Option<LoE<Matrix>>,
@@ -145,7 +154,7 @@ pub struct Strategy {
     pub max_parallel: Option<LoE<u64>>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct Matrix {
     #[serde(default)]
@@ -156,7 +165,7 @@ pub struct Matrix {
     pub dimensions: LoE<IndexMap<String, LoE<Vec<Value>>>>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case", untagged)]
 pub enum Container {
     Name(String),
@@ -172,19 +181,19 @@ pub enum Container {
     },
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct DockerCredentials {
     pub username: Option<String>,
     pub password: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct ReusableWorkflowCallJob {
     pub name: Option<String>,
     #[serde(default)]
     pub permissions: Permissions,
-    #[serde(default, deserialize_with = "crate::common::scalar_or_vector")]
+    #[serde(default, with = "crate::common::scalar_or_vector")]
     pub needs: Vec<String>,
     pub r#if: Option<If>,
     #[serde(deserialize_with = "crate::common::reusable_step_uses")]
@@ -194,7 +203,7 @@ pub struct ReusableWorkflowCallJob {
     pub secrets: Option<Secrets>,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Secrets {
     Inherit,

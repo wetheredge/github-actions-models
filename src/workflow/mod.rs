@@ -8,7 +8,7 @@
 //! [JSON Schema definition for workflows]: https://json.schemastore.org/github-workflow.json
 
 use indexmap::IndexMap;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::common::{
     Env, Permissions,
@@ -19,7 +19,7 @@ pub mod event;
 pub mod job;
 
 /// A single GitHub Actions workflow.
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct Workflow {
     pub name: Option<String>,
@@ -57,7 +57,7 @@ pub struct Workflow {
 ///         branches: [main]
 ///       pull_request:
 ///     ```
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "snake_case", untagged)]
 pub enum Trigger {
     BareEvent(event::BareEvent),
@@ -65,20 +65,20 @@ pub enum Trigger {
     Events(Box<event::Events>),
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct Defaults {
     pub run: Option<RunDefaults>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct RunDefaults {
     pub shell: Option<String>,
     pub working_directory: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case", untagged)]
 pub enum Concurrency {
     Bare(String),
@@ -89,7 +89,7 @@ pub enum Concurrency {
     },
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case", untagged)]
 pub enum Job {
     NormalJob(Box<job::NormalJob>),

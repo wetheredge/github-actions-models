@@ -120,7 +120,7 @@ pub struct Update {
     // TODO: pull-request-branch-name
     #[serde(default)]
     pub rebase_strategy: RebaseStrategy,
-    #[serde(default, deserialize_with = "crate::common::scalar_or_vector")]
+    #[serde(default, with = "crate::common::scalar_or_vector")]
     pub registries: Vec<String>,
     #[serde(default)]
     pub reviewers: IndexSet<String>,
